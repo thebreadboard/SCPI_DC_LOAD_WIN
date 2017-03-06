@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Text.RegularExpressions;
-using System.IO.Ports;
+
 using System.Collections.Generic;
 using System.Management;
 using System.Windows.Forms;
@@ -8,28 +8,47 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Linq;
 using System.Diagnostics;
-
+using System.Timers;
+using System.IO.Ports;
 
 namespace DC_Load_UI
 {
 
     public partial class Form1 : Form
     {
-        String txtIDNQuery = "*IDN?";
-        String txtDACWrite = "DEVE:DAC1";
-        String txtADC1Query = "DEVE:ADC1?";
-        String txtADC2Query = "DEVE:ADC2?";
-        String txtADC3Query = "DEVE:ADC3?";
-        String txtADC4Query = "DEVE:ADC4?";
-        DeviceManager myComPorts = new DeviceManager();
-        
+        String txtIDNQuery =  "*IDN?";
+        String txtDACWrite =  "DEVE:DAC1";
+        String txtADC1Query = "DEVE:ADC1";
+        String txtADC2Query = "DEVE:ADC2";
+        String txtADC3Query = "DEVE:ADC3";
+        String txtADC4Query = "DEVE:ADC4";
+        String txtADCVolts =  ":VOLTage";
+        String txtADCRAW =    ":RAW";
+        String txtQuery =     "?";
+        String txtErr =       "SYST:ERR";
+
+        private System.Timers.Timer aTimer;
+        private bool check_Errors = false;
+
+        List<String> tList = new List<String>();
+
         public Form1()
         {
             InitializeComponent();
-            myComPorts.PropertyChanged += new  PropertyChangedEventHandler(comPorts_ListChanged);
-
+            Serial.myComPorts.PropertyChanged += new  PropertyChangedEventHandler(comPorts_ListChanged);
         }
-        List<String> tList = new List<String>();
+        private void Form1_Load(object sender, EventArgs e)
+        {
+            RefreshPortList();
+            //do this here so it does not trigger before the drop down is ready
+            // Create a timer with a ten second interval.
+            aTimer = new System.Timers.Timer(10000);
+            // Hook up the Elapsed event for the timer.
+            aTimer.Elapsed += new ElapsedEventHandler(OnTimedEvent);
+            // Set the Interval to 2 seconds (2000 milliseconds).
+            aTimer.Interval = 2000;
+            aTimer.Enabled = true;
+        }
 
         private void RefreshPorts_Click(object sender, EventArgs e)
         {
@@ -37,105 +56,105 @@ namespace DC_Load_UI
         }
         private void RefreshPortList()
         {
-            comPorts.SelectedIndexChanged -= comPorts_SelectedIndexChanged;
-            comPorts.DataSource = new BindingSource(myComPorts.SerialPorts, null);
-            comPorts.DisplayMember = "Key";
-            comPorts.ValueMember = "Value";
-            comPorts.Invoke(comPorts => comPorts.Refresh());
-            comPorts.SelectedIndexChanged += new EventHandler(comPorts_SelectedIndexChanged);
-
+            check_Errors = false; // stop probing for errors
+            adcAuto.Checked = false; // Stop auto update of ADCs
+            txtSelectedPort.Text = "";
+            Serial.serialPort.Close(); // if it is open then close it
+            if (Serial.myComPorts.SerialPorts.Count > 0)
+            {
+                comPorts.SelectedIndexChanged -= comPorts_SelectedIndexChanged;
+                comPorts.DataSource = new BindingSource(Serial.myComPorts.SerialPorts, null);
+                comPorts.DisplayMember = "Key";
+                comPorts.ValueMember = "Value";
+                comPorts.SelectedIndex = 0;
+                comPorts.SelectedIndexChanged += new EventHandler(comPorts_SelectedIndexChanged);
+                }
+            else
+            {
+                
+            }
+        }
+        private void readADC_Scheduled()
+        {
+            if (adcAuto.Checked)
+            {
+                this.Invoke((MethodInvoker)delegate {
+                    readADCs();
+                }); 
+            }
         }
         private void readADC_Click(object sender, EventArgs e)
         {
-            SerialPort serialPort = (SerialPort)comPorts.SelectedValue;
-            serialPort.ReadTimeout = 500;
-            serialPort.WriteTimeout = 500;
-
+            readADCs();
+        }
+        private void readADCs()
+        {
+            String txtFormat = (formatABS.Checked ? txtADCRAW : (formatVolts.Checked ? txtADCVolts : "") )+ txtQuery;
             txtADCResponse.Clear();
+            txtADCResponse.AppendText(DateTime.Now.ToString("HH:mm:ss") + Environment.NewLine); 
+            txtConsole.Clear();
+            string message;
             try
             {
-                serialPort.Open();
-                // Send an ID Query
-                serialPort.WriteLine(txtADC1Query);
-                string message = Read(serialPort);
+                Serial.Open_SerialPort(); // keep the serial port open as were doing multiple operations
+                Serial.WriteSerial(txtADC1Query + txtFormat) ;
+                message = Serial.ReadSerial();
                 if (message == string.Empty) { txtADCResponse.AppendText(txtADC1Query + " Error" + Environment.NewLine); }
                 else { txtADCResponse.AppendText(txtADC1Query + " = " + message + Environment.NewLine); }
-                serialPort.WriteLine(txtADC2Query);
-                message = Read(serialPort);
+                Serial.WriteSerial(txtADC2Query + txtFormat);
+                message = Serial.ReadSerial();
                 if (message == string.Empty) { txtADCResponse.AppendText(txtADC2Query + " Error" + Environment.NewLine); }
                 else { txtADCResponse.AppendText(txtADC2Query + " = " + message + Environment.NewLine); }
-                serialPort.WriteLine(txtADC3Query);
-                message = Read(serialPort);
+                Serial.WriteSerial(txtADC3Query + txtFormat);
+                message = Serial.ReadSerial();
                 if (message == string.Empty) { txtADCResponse.AppendText(txtADC3Query + " Error" + Environment.NewLine); }
                 else { txtADCResponse.AppendText(txtADC3Query + " = " + message + Environment.NewLine); }
-                serialPort.WriteLine(txtADC4Query);
-                message = Read(serialPort);
+                Serial.WriteSerial(txtADC4Query + txtFormat);
+                message = Serial.ReadSerial();
                 if (message == string.Empty) { txtADCResponse.AppendText(txtADC4Query + " Error" + Environment.NewLine); }
                 else { txtADCResponse.AppendText(txtADC4Query + " = " + message + Environment.NewLine); }
-
+                Check_Errors_Scheduled();
             }
             catch (Exception ex)
             {
-                txtConsole.Clear();
-                txtConsole.AppendText(ex.Message);
+                txtConsole.AppendText(ex.Message + Environment.NewLine);
             }
             finally
             {
-                serialPort.Close();
+                Serial.Close_SerialPort();
             }
-
         }
-
-    private void refreshID_Click(object sender, EventArgs e)
+        private void refreshID_Click(object sender, EventArgs e)
         {
-            refreshIDs();
+            getIDN();
         }
-        private void refreshIDs()
+        private void getIDN()
         {
-            txtConsole.Clear();
-            SerialPort serialPort = (SerialPort)comPorts.SelectedValue;
-            serialPort.ReadTimeout = 500;
-            serialPort.WriteTimeout = 500;
             try
             {
-                serialPort.Open();
                 // Send an ID Query
-                serialPort.WriteLine(txtIDNQuery);
-                string message = Read(serialPort);
-                deviceID.Text = message;
+                Serial.WriteSerial (txtIDNQuery);
+                string message = Serial.ReadSerial();
+                if (message != string.Empty)
+                {
+                    deviceID.Text = message;
+                    check_Errors = true;
+                }
+                else
+                {
+                    check_Errors = false;
+                    adcAuto.Checked = false;
+                }
             }
             catch (Exception ex)
             {
-                txtConsole.Clear();
-                txtConsole.AppendText(txtIDNQuery + " :- " + ex.Message);
-            }
-            finally
-            {
-                serialPort.Close();
+                txtConsole.AppendText(Environment.NewLine + txtIDNQuery + " :- " + ex.Message);
+                check_Errors = false;
             }
         }
 
-
-    public string Read(SerialPort serial)
-    {
-       string message = string.Empty;
-
-            try
-            {
-                message = serial.ReadLine();
-                
-            }
-            catch (TimeoutException ex) {
-                    txtConsole.Clear();
-                    txtConsole.AppendText(ex.Message);
-                }
-            return message;
-    }
-    private void setDAC_Click(object sender, EventArgs e)
+        private void setDAC_Click(object sender, EventArgs e)
         {
-            SerialPort serialPort = (SerialPort)comPorts.SelectedValue;
-            serialPort.ReadTimeout = 500;
-            serialPort.WriteTimeout = 500;
             int valDAC;
             bool isNumeric = int.TryParse(txtDACValue.Text, out valDAC);
             txtConsole.Clear();
@@ -144,22 +163,13 @@ namespace DC_Load_UI
 
                 try
                 {
-                    serialPort.Open();
                     // Send an DAC Write
                     string sendmessage = txtDACWrite + " #H" + valDAC.ToString("X4"); ;
-                    serialPort.WriteLine(sendmessage);
-                    //string message = Read(serialPort);
-                    //if (message == "Error") { txtConsole.AppendText(txtDACWrite + " Error" + Environment.NewLine); }
-                    //else { txtConsole.AppendText(txtDACWrite + " = " + message + Environment.NewLine); }
+                    Serial.WriteSerial(sendmessage);
                 }
                 catch (Exception ex)
                 {
-                    txtConsole.Clear();
-                    txtConsole.AppendText(ex.Message);
-                }
-                finally
-                {
-                    serialPort.Close();
+                    txtConsole.AppendText(ex.Message + Environment.NewLine);
                 }
             }
             else {
@@ -169,156 +179,93 @@ namespace DC_Load_UI
 
         }
 
-        private void Form1_Load(object sender, EventArgs e)
+
+        private void Check_Errors_Scheduled()
         {
-            RefreshPortList();
-            //do this here so it does not trigger before the drop down is ready
-            comPorts.SelectedIndexChanged += new EventHandler(comPorts_SelectedIndexChanged);
-        }
-
-
-        private void comPorts_ListChanged(object sender, EventArgs e)
-        {
-            RefreshPortList();
-        }
-
-        private void comPorts_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            refreshIDs();
-        }
-    }
-    /// <summary>
-    ///     Provides automated detection and initiation of serial devices.
-    /// </summary>
-    public sealed class DeviceManager : IDisposable, INotifyPropertyChanged
-    {
-        /// <summary>
-        ///     A System Watcher to hook events from the WMI tree.
-        /// </summary>
-        private readonly ManagementEventWatcher _deviceWatcher = new ManagementEventWatcher(new WqlEventQuery(
-            "SELECT * FROM Win32_DeviceChangeEvent WHERE EventType = 2 OR EventType = 3"));
-
-        /// <summary>
-        ///     A list of all dynamically found SerialPorts.
-        /// </summary>
-        private Dictionary<string, SerialPort> _serialPorts = new Dictionary<string, SerialPort>();
-
-        /// <summary>
-        ///     Initialises a new instance of the <see cref="DeviceManager"/> class.
-        /// </summary>
-        public DeviceManager()
-        {
-            // Attach an event listener to the device watcher.
-            _deviceWatcher.EventArrived += _deviceWatcher_EventArrived;
-
-            // Start monitoring the WMI tree for changes in SerialPort devices.
-            _deviceWatcher.Start();
-
-            // Initially populate the devices list.
-            DiscoverDevices();
-        }
-
-        /// <summary>
-        ///     Gets a list of all dynamically found SerialPorts.
-        /// </summary>
-        /// <value>A list of all dynamically found SerialPorts.</value>
-        public Dictionary<string, SerialPort> SerialPorts
-        {
-            get { return _serialPorts; }
-            private set
+            if (check_Errors)
             {
-                _serialPorts = value;
-                OnPropertyChanged();
+               this.Invoke((MethodInvoker)delegate {
+                   txtStatus.AppendText(Check_Errors());
+               });
             }
         }
-
-        /// <summary>
-        ///     Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
-        /// </summary>
-        public void Dispose()
+        private string Check_Errors()
         {
-            // Stop the WMI monitors when this instance is disposed.
-            _deviceWatcher.Stop();
+            string message = string.Empty;
+                try
+                {
+                Serial.WriteSerial(txtErr + txtQuery );
+                message = DateTime.Now.ToString("HH:mm:ss") + "   :-  " + Serial.ReadSerial()+ Environment.NewLine; // runs on UI thread
+                }
+                catch (Exception ex)
+                {
+                    this.Invoke((MethodInvoker)delegate {
+                    txtConsole.AppendText(txtIDNQuery + " :- " + ex.Message); // runs on UI thread
+                    });
+                }
+                return message;
+        }
+        // Specify what you want to happen when the Elapsed event is  
+        // raised. 
+        private void OnTimedEvent(object source, ElapsedEventArgs e)
+        {
+            readADC_Scheduled();
+            Check_Errors_Scheduled();
         }
 
-        /// <summary>
-        ///     Occurs when a property value changes.
-        /// </summary>
-        public event PropertyChangedEventHandler PropertyChanged;
-
-        /// <summary>
-        ///     Handles the EventArrived event of the _deviceWatcher control.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="EventArrivedEventArgs"/> instance containing the event data.</param>
-        private void _deviceWatcher_EventArrived(object sender, EventArrivedEventArgs e)
+        public void comPorts_ListChanged(object sender, EventArgs e)
         {
-            DiscoverDevices();
+            this.Invoke((MethodInvoker)delegate
+            {
+                RefreshPortList();
+            });
         }
 
-        /// <summary>
-        ///     Dynamically populates the SerialPorts property with relevant devices discovered from the WMI Win32_SerialPorts class.
-        /// </summary>
-        private void DiscoverDevices()
+        private void txtStatus_TextChanged(object sender, EventArgs e)
         {
-            // Create a temporary dictionary to superimpose onto the SerialPorts property.
-            var dict = new Dictionary<string, SerialPort>();
+            // set the current caret position to the end
+            txtStatus.SelectionStart = txtStatus.Text.Length;
+            // scroll it automatically
+            txtStatus.ScrollToCaret();
+        }
+        private void comPorts_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            Serial.serialPort = (SerialPort)comPorts.SelectedValue;
+            txtSelectedPort.Text = comPorts.Text;
+            txtConsole.Clear();
+            txtStatus.Clear();
+            getIDN();
+        }
+
+        private void txtConsole_TextChanged(object sender, EventArgs e)
+        {
+            // set the current caret position to the end
+            txtConsole.SelectionStart = txtConsole.Text.Length;
+            // scroll it automatically
+            txtConsole.ScrollToCaret();
+        }
+
+        private void btmManual_Click(object sender, EventArgs e)
+        {
+           adcAuto.Checked = false; // Stop auto update of ADCs
+           txtConsole.Clear();
 
             try
             {
-                // Scan through each SerialPort registered in the WMI.
-                foreach (ManagementObject device in
-                    new ManagementObjectSearcher("root\\CIMV2", "SELECT * FROM Win32_SerialPort").Get())
+                // Send an DAC Write
+                string sendmessage = txtMessage.Text;
+                Serial.WriteSerial(sendmessage);
+                if (sendmessage.EndsWith("?"))
                 {
-                    // Create a SerialPort to add to the collection.
-                    var port = new SerialPort();
 
-                    // Gather related configuration details for the Arduino Device.
-                    var config = device.GetRelated("Win32_SerialPortConfiguration")
-                                       .Cast<ManagementObject>().ToList().FirstOrDefault();
-
-                    // Set the SerialPort's PortName property.
-                    port.PortName = device["DeviceID"].ToString();
-
-                    // Set the SerialPort's BaudRate property. Use the devices maximum BaudRate as a fallback.
-                    port.BaudRate = (config != null)
-                                        ? int.Parse(config["BaudRate"].ToString())
-                                        : int.Parse(device["MaxBaudRate"].ToString());
-
-                    // Add the SerialPort to the dictionary.
-                    dict.Add(device["Name"].ToString(), port);
+                    string message = Serial.ReadSerial();
+                    txtConsole.AppendText(DateTime.Now.ToString("HH:mm:ss") + " :- " + message + Environment.NewLine);
                 }
-
-                // Return the dictionary.
-                SerialPorts = dict;
             }
-            catch (ManagementException mex)
+            catch (Exception ex)
             {
-                // Send a message to debug.
-                Debug.WriteLine(@"An error occurred while querying for WMI data: " + mex.Message);
+                txtConsole.AppendText(ex.Message + Environment.NewLine);
             }
-        }
-
-        /// <summary>
-        ///     Called when a property is set.
-        /// </summary>
-        /// <param name="propertyName">Name of the property.</param>
-        //[NotifyPropertyChangedInvocator]
-        private void OnPropertyChanged([CallerMemberName] string propertyName = null)
-        {
-            var handler = PropertyChanged;
-            if (handler != null) handler(this, new PropertyChangedEventArgs(propertyName));
-        }
-    }
-    public static class Extensions
-    {
-        public static void Invoke<TControlType>(this TControlType control, Action<TControlType> del)
-            where TControlType : Control
-        {
-            if (control.InvokeRequired)
-                control.Invoke(new Action(() => del(control)));
-            else
-                del(control);
-        }
+}
     }
 }
