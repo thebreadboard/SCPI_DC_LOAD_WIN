@@ -92,7 +92,6 @@ namespace DC_Load_UI
             String txtFormat = (formatABS.Checked ? txtADCRAW : (formatVolts.Checked ? txtADCVolts : "") )+ txtQuery;
             txtADCResponse.Clear();
             txtADCResponse.AppendText(DateTime.Now.ToString("HH:mm:ss") + Environment.NewLine); 
-            txtConsole.Clear();
             string message;
             try
             {
@@ -117,7 +116,7 @@ namespace DC_Load_UI
             }
             catch (Exception ex)
             {
-                txtConsole.AppendText(ex.Message + Environment.NewLine);
+                txtConsole.AppendText(DateTime.Now.ToString("HH:mm:ss") + " :- " + ex.Message + Environment.NewLine);
             }
             finally
             {
@@ -148,7 +147,7 @@ namespace DC_Load_UI
             }
             catch (Exception ex)
             {
-                txtConsole.AppendText(Environment.NewLine + txtIDNQuery + " :- " + ex.Message);
+                txtConsole.AppendText(DateTime.Now.ToString("HH:mm:ss") + " :- " + txtIDNQuery + " :- " + ex.Message + Environment.NewLine);
                 check_Errors = false;
             }
         }
@@ -157,10 +156,8 @@ namespace DC_Load_UI
         {
             int valDAC;
             bool isNumeric = int.TryParse(txtDACValue.Text, out valDAC);
-            txtConsole.Clear();
             if (isNumeric)
             {
-
                 try
                 {
                     // Send an DAC Write
@@ -169,7 +166,7 @@ namespace DC_Load_UI
                 }
                 catch (Exception ex)
                 {
-                    txtConsole.AppendText(ex.Message + Environment.NewLine);
+                    txtConsole.AppendText(DateTime.Now.ToString("HH:mm:ss") + " :- " + ex.Message + Environment.NewLine);
                 }
             }
             else {
@@ -200,7 +197,7 @@ namespace DC_Load_UI
                 catch (Exception ex)
                 {
                     this.Invoke((MethodInvoker)delegate {
-                    txtConsole.AppendText(txtIDNQuery + " :- " + ex.Message); // runs on UI thread
+                    txtConsole.AppendText(DateTime.Now.ToString("HH:mm:ss") + " :- " + txtIDNQuery + " :- " + ex.Message + Environment.NewLine ); // runs on UI thread
                     });
                 }
                 return message;
@@ -248,8 +245,6 @@ namespace DC_Load_UI
         private void btmManual_Click(object sender, EventArgs e)
         {
            adcAuto.Checked = false; // Stop auto update of ADCs
-           txtConsole.Clear();
-
             try
             {
                 // Send an DAC Write
@@ -264,8 +259,13 @@ namespace DC_Load_UI
             }
             catch (Exception ex)
             {
-                txtConsole.AppendText(ex.Message + Environment.NewLine);
+                txtConsole.AppendText(DateTime.Now.ToString("HH:mm:ss") + " :- " + ex.Message + Environment.NewLine);
             }
 }
+
+        private void btnClearConsoole_Click(object sender, EventArgs e)
+        {
+            txtConsole.Clear();
+        }
     }
 }

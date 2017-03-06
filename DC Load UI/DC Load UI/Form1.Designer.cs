@@ -56,6 +56,7 @@
             this.panel1 = new System.Windows.Forms.Panel();
             this.asdasdasdfasdf = new System.Windows.Forms.Label();
             this.txtSelectedPort = new System.Windows.Forms.TextBox();
+            this.btnClearConsoole = new System.Windows.Forms.Button();
             this.panel1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -296,6 +297,7 @@
             // panel1
             // 
             this.panel1.BackColor = System.Drawing.Color.Aquamarine;
+            this.panel1.Controls.Add(this.btnClearConsoole);
             this.panel1.Controls.Add(this.asdasdasdfasdf);
             this.panel1.Controls.Add(this.txtMessage);
             this.panel1.Controls.Add(this.label5);
@@ -336,6 +338,17 @@
             this.txtSelectedPort.Name = "txtSelectedPort";
             this.txtSelectedPort.Size = new System.Drawing.Size(598, 31);
             this.txtSelectedPort.TabIndex = 25;
+            // 
+            // btnClearConsoole
+            // 
+            this.btnClearConsoole.Font = new System.Drawing.Font("Microsoft Sans Serif", 15.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.btnClearConsoole.Location = new System.Drawing.Point(7, 414);
+            this.btnClearConsoole.Name = "btnClearConsoole";
+            this.btnClearConsoole.Size = new System.Drawing.Size(62, 32);
+            this.btnClearConsoole.TabIndex = 27;
+            this.btnClearConsoole.Text = "CLR";
+            this.btnClearConsoole.UseVisualStyleBackColor = true;
+            this.btnClearConsoole.Click += new System.EventHandler(this.btnClearConsoole_Click);
             // 
             // Form1
             // 
@@ -391,6 +404,7 @@
         private System.Windows.Forms.Panel panel1;
         private System.Windows.Forms.Label asdasdasdfasdf;
         private System.Windows.Forms.TextBox txtSelectedPort;
+        private System.Windows.Forms.Button btnClearConsoole;
     }
 }
 
